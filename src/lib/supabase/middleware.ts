@@ -5,7 +5,13 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { env } from "@/lib/env";
 
 /** Route prefixes that require an authenticated user. */
-const PROTECTED_PREFIXES = ["/dashboard", "/organizations", "/settings", "/invitations"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/organizations",
+  "/settings",
+  "/invitations",
+  "/customers",
+];
 
 /**
  * Refreshes the Supabase auth session on every request and redirects

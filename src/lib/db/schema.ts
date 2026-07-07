@@ -141,3 +141,53 @@ export const auditLog = pgTable(
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;
 export type AuditAction = (typeof auditAction.enumValues)[number];
+
+/** Customer lifecycle: active customers are the working set; archived are hidden
+ *  by default but retained (never hard-deleted by archiving). */
+export const customerStatus = pgEnum("customer_status", ["active", "archived"]);
+
+/**
+ * A customer (company) belonging to an organization. This is the first product
+ * table; like all product data it carries `organization_id` and is only ever
+ * reached through the org-scoped data layer (`lib/data/customers`), which is
+ * where multi-tenant isolation is enforced.
+ */
+export const customers = pgTable(
+  "customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    companyName: text("company_name").notNull(),
+    contactName: text("contact_name"),
+    email: text("email"),
+    phone: text("phone"),
+    addressLine: text("address_line"),
+    postalCode: text("postal_code"),
+    city: text("city"),
+    country: text("country").notNull().default("Netherlands"),
+    // Dutch Chamber of Commerce (KVK) number.
+    kvkNumber: text("kvk_number"),
+    // Dutch VAT (BTW) number.
+    vatNumber: text("vat_number"),
+    notes: text("notes"),
+    status: customerStatus("status").notNull().default("active"),
+    createdByUserId: uuid("created_by_user_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("customers_org_idx").on(t.organizationId),
+    index("customers_org_status_idx").on(t.organizationId, t.status),
+    // Includes id so the list's (company_name, id) sort has a stable, unique,
+    // index-backed total order (prevents OFFSET pagination skips/dupes on ties).
+    index("customers_org_company_idx").on(t.organizationId, t.companyName, t.id),
+  ],
+);
+
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
+export type CustomerStatus = (typeof customerStatus.enumValues)[number];
