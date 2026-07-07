@@ -12,6 +12,7 @@ import {
   type OrganizationRole,
 } from "@/lib/db/schema";
 import { AppError, ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
+import { isManagerRole } from "@/lib/organizations/membership";
 import { resolveUniqueSlug } from "@/lib/organizations/slug";
 import type {
   CreateOrganizationInput,
@@ -50,8 +51,6 @@ export type OrganizationWithRole = {
   createdAt: Date;
   role: OrganizationRole;
 };
-
-const MANAGER_ROLES: OrganizationRole[] = ["owner", "admin"];
 
 /** Is a slug already used (optionally excluding one organization for updates)? */
 export async function isSlugTaken(slug: string, exceptOrganizationId?: string): Promise<boolean> {
@@ -151,11 +150,32 @@ export async function requireMembership(
   return membership;
 }
 
+/** Require the user to be an owner or admin; throws otherwise. */
+export async function requireOrgManager(
+  userId: string,
+  organizationId: string,
+): Promise<OrganizationMember> {
+  const membership = await requireMembership(userId, organizationId);
+  if (!isManagerRole(membership.role)) {
+    throw new ForbiddenError("Only owners and admins can perform this action");
+  }
+  return membership;
+}
+
 export async function getOrganizationBySlug(slug: string): Promise<Organization | null> {
   const [organization] = await db
     .select()
     .from(organizations)
     .where(eq(organizations.slug, slug))
+    .limit(1);
+  return organization ?? null;
+}
+
+export async function getOrganizationById(organizationId: string): Promise<Organization | null> {
+  const [organization] = await db
+    .select()
+    .from(organizations)
+    .where(eq(organizations.id, organizationId))
     .limit(1);
   return organization ?? null;
 }
@@ -167,7 +187,7 @@ export async function updateOrganization(
   input: UpdateOrganizationInput,
 ): Promise<Organization> {
   const membership = await requireMembership(userId, organizationId);
-  if (!MANAGER_ROLES.includes(membership.role)) {
+  if (!isManagerRole(membership.role)) {
     throw new ForbiddenError("Only owners and admins can update the organization");
   }
 

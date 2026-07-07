@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { type ActionResult } from "@/lib/action-result";
 import { requireUser } from "@/lib/auth";
 import { setActiveOrganizationCookie } from "@/lib/auth/org";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@/lib/validations/organization";
 import { firstIssueMessage } from "@/lib/zod";
 
-export type ActionResult = { ok: true } | { ok: false; error: string };
+export type { ActionResult };
 
 /** Create an organization and switch to it, then go to the dashboard. */
 export async function createOrganizationAction(raw: unknown): Promise<ActionResult> {

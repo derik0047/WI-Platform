@@ -1,4 +1,4 @@
-import { index, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 
 /**
  * `profiles` mirrors Supabase `auth.users` (1:1 by id) and holds app-owned
@@ -59,3 +59,85 @@ export const organizationMembers = pgTable(
 export type OrganizationMember = typeof organizationMembers.$inferSelect;
 export type NewOrganizationMember = typeof organizationMembers.$inferInsert;
 export type OrganizationRole = (typeof organizationRole.enumValues)[number];
+
+/** Lifecycle of an emailed invitation. Time-based expiry is derived from
+ *  `expires_at`, so it is not a stored status. */
+export const invitationStatus = pgEnum("invitation_status", [
+  "pending",
+  "accepted",
+  "rejected",
+  "revoked",
+]);
+
+/** Pending/settled invitations to join an organization. One live (pending,
+ *  unexpired) invitation per (organization, email) is enforced in the data layer. */
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    role: organizationRole("role").notNull().default("member"),
+    // Opaque, URL-safe secret used to look up the invitation from the email link.
+    token: text("token").notNull().unique(),
+    status: invitationStatus("status").notNull().default("pending"),
+    invitedByUserId: uuid("invited_by_user_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    // Set when the invitation is accepted/rejected/revoked.
+    respondedByUserId: uuid("responded_by_user_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("invitations_org_idx").on(t.organizationId),
+    index("invitations_email_idx").on(t.email),
+  ],
+);
+
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;
+export type InvitationStatus = (typeof invitationStatus.enumValues)[number];
+
+/** Membership actions recorded to the append-only audit log. */
+export const auditAction = pgEnum("audit_action", [
+  "member.invited",
+  "invitation.accepted",
+  "invitation.rejected",
+  "invitation.revoked",
+  "invitation.resent",
+  "member.role_changed",
+  "member.removed",
+  "ownership.transferred",
+]);
+
+/**
+ * Append-only audit trail for membership changes. Actor/target are denormalised
+ * (email + id) so entries stay readable even after a user or invitation is
+ * deleted; `metadata` holds action-specific detail (e.g. old/new role).
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    action: auditAction("action").notNull(),
+    actorId: uuid("actor_id"),
+    actorEmail: text("actor_email"),
+    targetEmail: text("target_email"),
+    metadata: jsonb("metadata").notNull().default({}).$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("audit_log_org_created_idx").on(t.organizationId, t.createdAt)],
+);
+
+export type AuditLogEntry = typeof auditLog.$inferSelect;
+export type NewAuditLogEntry = typeof auditLog.$inferInsert;
+export type AuditAction = (typeof auditAction.enumValues)[number];

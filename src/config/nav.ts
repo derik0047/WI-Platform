@@ -1,4 +1,4 @@
-import { Home, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { Home, LayoutDashboard, Settings, Users, type LucideIcon } from "lucide-react";
 
 import type { Route } from "next";
 
@@ -15,5 +15,6 @@ export type NavItem = {
 export const mainNav: NavItem[] = [
   { title: "Home", href: "/", icon: Home },
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { title: "Members", href: "/settings/members", icon: Users },
   { title: "Settings", href: "/settings/organization", icon: Settings },
 ];
