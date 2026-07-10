@@ -1,4 +1,16 @@
-import { index, jsonb, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import {
+  date,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 /**
  * `profiles` mirrors Supabase `auth.users` (1:1 by id) and holds app-owned
@@ -104,7 +116,7 @@ export type Invitation = typeof invitations.$inferSelect;
 export type NewInvitation = typeof invitations.$inferInsert;
 export type InvitationStatus = (typeof invitationStatus.enumValues)[number];
 
-/** Membership actions recorded to the append-only audit log. */
+/** Actions recorded to the append-only audit log (membership + invoices). */
 export const auditAction = pgEnum("audit_action", [
   "member.invited",
   "invitation.accepted",
@@ -114,12 +126,18 @@ export const auditAction = pgEnum("audit_action", [
   "member.role_changed",
   "member.removed",
   "ownership.transferred",
+  "invoice.created",
+  "invoice.updated",
+  "invoice.status_changed",
+  "invoice.deleted",
 ]);
 
 /**
- * Append-only audit trail for membership changes. Actor/target are denormalised
- * (email + id) so entries stay readable even after a user or invitation is
- * deleted; `metadata` holds action-specific detail (e.g. old/new role).
+ * Append-only, org-scoped audit trail. Actor/target are denormalised (email + id)
+ * so entries stay readable even after a referenced row is deleted. `target_type`
+ * + `target_id` point at the affected entity (e.g. "invoice"); `metadata` holds
+ * action-specific detail (e.g. old/new role, old/new status). Membership events
+ * leave target_type null and use target_email instead.
  */
 export const auditLog = pgTable(
   "audit_log",
@@ -132,10 +150,15 @@ export const auditLog = pgTable(
     actorId: uuid("actor_id"),
     actorEmail: text("actor_email"),
     targetEmail: text("target_email"),
+    targetType: text("target_type"),
+    targetId: uuid("target_id"),
     metadata: jsonb("metadata").notNull().default({}).$type<Record<string, unknown>>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (t) => [index("audit_log_org_created_idx").on(t.organizationId, t.createdAt)],
+  (t) => [
+    index("audit_log_org_created_idx").on(t.organizationId, t.createdAt),
+    index("audit_log_org_target_idx").on(t.organizationId, t.targetType, t.targetId),
+  ],
 );
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;
@@ -191,3 +214,71 @@ export const customers = pgTable(
 export type Customer = typeof customers.$inferSelect;
 export type NewCustomer = typeof customers.$inferInsert;
 export type CustomerStatus = (typeof customerStatus.enumValues)[number];
+
+/** Invoice lifecycle. Transitions are enforced in lib/invoices/status. */
+export const invoiceStatus = pgEnum("invoice_status", [
+  "draft",
+  "sent",
+  "paid",
+  "overdue",
+  "cancelled",
+]);
+
+/**
+ * Per-organization, per-year invoice number sequence. Incremented atomically via
+ * an upsert (`ON CONFLICT DO UPDATE ... last_seq + 1`) inside the create
+ * transaction, so concurrent invoice creation never collides.
+ */
+export const invoiceCounters = pgTable(
+  "invoice_counters",
+  {
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    year: integer("year").notNull(),
+    lastSeq: integer("last_seq").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.year] })],
+);
+
+/**
+ * An invoice header belonging to an organization. Like all product data it
+ * carries `organization_id` and is only reached through the org-scoped data layer
+ * (`lib/data/invoices`). Monetary line items/totals are intentionally out of
+ * scope for this foundation.
+ */
+export const invoices = pgTable(
+  "invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    // Restrict: a customer with invoices cannot be hard-deleted (archive instead).
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "restrict" }),
+    invoiceNumber: text("invoice_number").notNull(),
+    status: invoiceStatus("status").notNull().default("draft"),
+    currency: text("currency").notNull().default("EUR"),
+    issueDate: date("issue_date", { mode: "string" }).notNull(),
+    dueDate: date("due_date", { mode: "string" }).notNull(),
+    notes: text("notes"),
+    createdByUserId: uuid("created_by_user_id").references(() => profiles.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("invoices_org_number_unique").on(t.organizationId, t.invoiceNumber),
+    index("invoices_org_status_idx").on(t.organizationId, t.status),
+    index("invoices_org_customer_idx").on(t.organizationId, t.customerId),
+    // Supports the default list sort (issue_date desc, id) with a stable order.
+    index("invoices_org_issue_idx").on(t.organizationId, t.issueDate, t.id),
+  ],
+);
+
+export type Invoice = typeof invoices.$inferSelect;
+export type NewInvoice = typeof invoices.$inferInsert;
+export type InvoiceStatus = (typeof invoiceStatus.enumValues)[number];

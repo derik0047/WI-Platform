@@ -11,6 +11,7 @@ const PROTECTED_PREFIXES = [
   "/settings",
   "/invitations",
   "/customers",
+  "/invoices",
 ];
 
 /**

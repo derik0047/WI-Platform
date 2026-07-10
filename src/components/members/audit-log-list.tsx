@@ -2,7 +2,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { AuditAction, AuditLogEntry } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/format";
 
-const ACTION_LABEL: Record<AuditAction, string> = {
+// Membership labels only; the members view is filtered to membership actions
+// (see lib/data/audit listAuditLog). Partial keeps this valid as the shared
+// AuditAction enum grows with other domains (e.g. invoices).
+const ACTION_LABEL: Partial<Record<AuditAction, string>> = {
   "member.invited": "invited",
   "invitation.accepted": "accepted an invitation",
   "invitation.rejected": "declined an invitation",
@@ -42,7 +45,7 @@ export function AuditLogList({ entries }: { entries: AuditLogEntry[] }) {
                 <li key={entry.id} className="flex flex-col gap-0.5 py-3">
                   <p className="text-sm">
                     <span className="font-medium">{entry.actorEmail ?? "Someone"}</span>{" "}
-                    {ACTION_LABEL[entry.action]}
+                    {ACTION_LABEL[entry.action] ?? entry.action}
                     {entry.targetEmail && <span className="font-medium"> {entry.targetEmail}</span>}
                     {extra && <span className="text-muted-foreground"> ({extra})</span>}
                   </p>

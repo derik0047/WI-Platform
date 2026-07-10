@@ -115,6 +115,35 @@ export async function getCustomer(
   return row;
 }
 
+/** Does a customer with this id exist in the organization? (For cross-module
+ *  reuse, e.g. invoices — the caller has already validated membership.) */
+export async function customerBelongsToOrg(
+  organizationId: string,
+  customerId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(eq(customers.id, customerId), eq(customers.organizationId, organizationId)))
+    .limit(1);
+  return Boolean(row);
+}
+
+/** Minimal id/name pairs for active customers (e.g. an invoice customer picker). */
+export type CustomerOption = { id: string; companyName: string };
+
+export async function listCustomerOptions(
+  userId: string,
+  organizationId: string,
+): Promise<CustomerOption[]> {
+  await requireMembership(userId, organizationId);
+  return db
+    .select({ id: customers.id, companyName: customers.companyName })
+    .from(customers)
+    .where(and(eq(customers.organizationId, organizationId), eq(customers.status, "active")))
+    .orderBy(asc(customers.companyName));
+}
+
 /** Create a customer in the organization. */
 export async function createCustomer(
   userId: string,
@@ -166,16 +195,29 @@ export async function setCustomerStatus(
   return row;
 }
 
-/** Permanently delete a customer (scoped to the organization). Throws if not found. */
+/** Permanently delete a customer (scoped to the organization). Throws if not
+ *  found, or a friendly CONFLICT if the customer is still referenced (e.g. has
+ *  invoices — those use ON DELETE restrict). */
 export async function deleteCustomer(
   userId: string,
   organizationId: string,
   customerId: string,
 ): Promise<void> {
   await requireMembership(userId, organizationId);
-  const deleted = await db
-    .delete(customers)
-    .where(and(eq(customers.id, customerId), eq(customers.organizationId, organizationId)))
-    .returning({ id: customers.id });
-  if (deleted.length === 0) throw new NotFoundError("Customer not found");
+  try {
+    const deleted = await db
+      .delete(customers)
+      .where(and(eq(customers.id, customerId), eq(customers.organizationId, organizationId)))
+      .returning({ id: customers.id });
+    if (deleted.length === 0) throw new NotFoundError("Customer not found");
+  } catch (error) {
+    // 23503 = foreign_key_violation (customer still referenced by invoices).
+    if (error && typeof error === "object" && "code" in error && error.code === "23503") {
+      throw new AppError(
+        "CONFLICT",
+        "This customer has invoices and can't be deleted. Archive it instead.",
+      );
+    }
+    throw error;
+  }
 }
