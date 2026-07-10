@@ -1,5 +1,6 @@
 import {
   bigint,
+  boolean,
   date,
   index,
   integer,
@@ -13,6 +14,8 @@ import {
   unique,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import type { VatGroup } from "@/lib/invoices/totals";
 
 /**
  * `profiles` mirrors Supabase `auth.users` (1:1 by id) and holds app-owned
@@ -136,6 +139,7 @@ export const auditAction = pgEnum("audit_action", [
   "invoice.line_updated",
   "invoice.line_removed",
   "invoice.line_reordered",
+  "invoice.totals_recalculated",
 ]);
 
 /**
@@ -250,8 +254,9 @@ export const invoiceCounters = pgTable(
 /**
  * An invoice header belonging to an organization. Like all product data it
  * carries `organization_id` and is only reached through the org-scoped data layer
- * (`lib/data/invoices`). Monetary line items/totals are intentionally out of
- * scope for this foundation.
+ * (`lib/data/invoices`). The `*_cents` totals and `vat_breakdown` are derived from
+ * the invoice's line items and recomputed automatically on every line change (see
+ * lib/data/invoice-totals); they are stored in integer minor units.
  */
 export const invoices = pgTable(
   "invoices",
@@ -270,6 +275,12 @@ export const invoices = pgTable(
     issueDate: date("issue_date", { mode: "string" }).notNull(),
     dueDate: date("due_date", { mode: "string" }).notNull(),
     notes: text("notes"),
+    // Derived totals (recomputed on every line change). Net of VAT, then VAT, then
+    // grand total; vat_breakdown is the per-rate/reverse-charge summary.
+    subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
+    vatTotalCents: bigint("vat_total_cents", { mode: "number" }).notNull().default(0),
+    grandTotalCents: bigint("grand_total_cents", { mode: "number" }).notNull().default(0),
+    vatBreakdown: jsonb("vat_breakdown").$type<VatGroup[]>().notNull().default([]),
     createdByUserId: uuid("created_by_user_id").references(() => profiles.id, {
       onDelete: "set null",
     }),
@@ -318,8 +329,12 @@ export const invoiceLines = pgTable(
     discountType: discountType("discount_type").notNull().default("percentage"),
     // Basis points (1% = 100) when discount_type = percentage; cents when = fixed.
     discountValue: bigint("discount_value", { mode: "number" }).notNull().default(0),
-    // VAT rate reference in basis points (e.g. 2100 = 21%). Not yet aggregated.
+    // VAT rate reference in basis points (e.g. 2100 = 21%). Aggregated by the
+    // totals engine (lib/invoices/totals); ignored for reverse-charge lines.
     vatRateBp: integer("vat_rate_bp").notNull().default(2100),
+    // Reverse charge (VAT shifted to the customer): this line's VAT is 0 and it
+    // forms its own group in the VAT summary, regardless of vat_rate_bp.
+    reverseCharge: boolean("reverse_charge").notNull().default(false),
     subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
     totalCents: bigint("total_cents", { mode: "number" }).notNull().default(0),
     notes: text("notes"),

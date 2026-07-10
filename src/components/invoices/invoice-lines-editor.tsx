@@ -142,8 +142,8 @@ export function InvoiceLinesEditor({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{line.description}</p>
                 <p className="text-muted-foreground text-xs">
-                  {line.quantity} {line.unit} × {formatMoney(line.unitPriceCents, currency)} · VAT{" "}
-                  {vatRateLabel(line.vatRateBp)}
+                  {line.quantity} {line.unit} × {formatMoney(line.unitPriceCents, currency)} ·{" "}
+                  {line.reverseCharge ? "Reverse charge" : `VAT ${vatRateLabel(line.vatRateBp)}`}
                   {discount ? ` · ${discount}` : ""}
                 </p>
                 {line.notes && (

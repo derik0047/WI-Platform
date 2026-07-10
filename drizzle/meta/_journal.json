@@ -36,6 +36,13 @@
       "when": 1783688364888,
       "tag": "0004_unknown_domino",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783692141227,
+      "tag": "0005_bored_klaw",
+      "breakpoints": true
     }
   ]
 }

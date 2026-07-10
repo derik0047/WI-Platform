@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AuditAction, AuditLogEntry } from "@/lib/db/schema";
 import { formatDateTime } from "@/lib/format";
+import { formatMoney } from "@/lib/invoices/line-math";
 
 const ACTION_LABEL: Partial<Record<AuditAction, string>> = {
   "invoice.created": "created this invoice",
@@ -11,6 +12,7 @@ const ACTION_LABEL: Partial<Record<AuditAction, string>> = {
   "invoice.line_updated": "updated a line",
   "invoice.line_removed": "removed a line",
   "invoice.line_reordered": "reordered the lines",
+  "invoice.totals_recalculated": "recalculated the totals",
 };
 
 function detail(entry: AuditLogEntry): string | null {
@@ -24,6 +26,13 @@ function detail(entry: AuditLogEntry): string | null {
     entry.metadata.description
   ) {
     return String(entry.metadata.description);
+  }
+  if (
+    entry.action === "invoice.totals_recalculated" &&
+    entry.metadata.to !== undefined &&
+    entry.metadata.currency
+  ) {
+    return formatMoney(Number(entry.metadata.to), String(entry.metadata.currency));
   }
   return null;
 }

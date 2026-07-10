@@ -30,6 +30,7 @@ export const invoiceLineFormSchema = z
     discountType: discountTypeSchema,
     discountValue: z.string().trim().regex(MONEY_RE, "Enter a valid discount"),
     vatRateBp: z.string().refine((v) => isAllowedVatRateBp(Number(v)), "Choose a VAT rate"),
+    reverseCharge: z.boolean(),
     notes: z.string().trim().max(2000),
   })
   .refine((v) => v.discountType !== "percentage" || Number(v.discountValue) <= 100, {

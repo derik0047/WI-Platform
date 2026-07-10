@@ -9,6 +9,7 @@ import { InvoiceAuditTrail } from "@/components/invoices/invoice-audit-trail";
 import { InvoiceLinesEditor } from "@/components/invoices/invoice-lines-editor";
 import { InvoiceStatusActions } from "@/components/invoices/invoice-status-actions";
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge";
+import { InvoiceTotalsSummary } from "@/components/invoices/invoice-totals-summary";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireActiveOrganization } from "@/lib/auth/org";
@@ -131,6 +132,14 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           />
         </CardContent>
       </Card>
+
+      <InvoiceTotalsSummary
+        subtotalCents={invoice.subtotalCents}
+        vatTotalCents={invoice.vatTotalCents}
+        grandTotalCents={invoice.grandTotalCents}
+        vatBreakdown={invoice.vatBreakdown}
+        currency={invoice.currency}
+      />
 
       <InvoiceAuditTrail entries={history} />
     </div>

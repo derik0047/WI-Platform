@@ -27,6 +27,7 @@ export function emptyLineForm(): InvoiceLineFormValues {
     discountType: "percentage",
     discountValue: "0",
     vatRateBp: String(DEFAULT_VAT_RATE_BP),
+    reverseCharge: false,
     notes: "",
   };
 }
@@ -43,6 +44,7 @@ export function lineToFormValues(line: InvoiceLine): InvoiceLineFormValues {
         ? basisPointsToPercentString(line.discountValue)
         : centsToMoneyString(line.discountValue),
     vatRateBp: String(line.vatRateBp),
+    reverseCharge: line.reverseCharge,
     notes: line.notes ?? "",
   };
 }
@@ -55,6 +57,7 @@ export type NormalizedLine = {
   discountType: DiscountType;
   discountValue: number;
   vatRateBp: number;
+  reverseCharge: boolean;
   subtotalCents: number;
   totalCents: number;
   notes: string | null;
@@ -83,6 +86,7 @@ export function normalizeLineInput(values: InvoiceLineFormValues): NormalizedLin
     discountType: values.discountType,
     discountValue,
     vatRateBp: Number(values.vatRateBp),
+    reverseCharge: values.reverseCharge,
     subtotalCents,
     totalCents,
     notes: values.notes.trim() || null,

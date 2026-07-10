@@ -139,6 +139,19 @@ export function InvoiceLineForm({
         </div>
       </div>
 
+      <div className="flex items-center gap-2">
+        <input
+          id={`rc-${uid}`}
+          type="checkbox"
+          className="border-input size-4 rounded"
+          disabled={pending}
+          {...register("reverseCharge")}
+        />
+        <Label htmlFor={`rc-${uid}`} className="font-normal">
+          Reverse charge (VAT shifted to the customer)
+        </Label>
+      </div>
+
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`notes-${uid}`}>Notes</Label>
         <Textarea id={`notes-${uid}`} rows={2} disabled={pending} {...register("notes")} />

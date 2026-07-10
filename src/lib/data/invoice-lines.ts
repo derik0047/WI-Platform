@@ -5,6 +5,7 @@ import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { invoiceLines, invoices, type InvoiceLine } from "@/lib/db/schema";
 import { recordAuditEvent, type Tx } from "@/lib/data/audit";
+import { recalcInvoiceTotals } from "@/lib/data/invoice-totals";
 import { requireMembership } from "@/lib/data/organizations";
 import { AppError, NotFoundError, ValidationError } from "@/lib/errors";
 import { normalizeLineInput } from "@/lib/invoices/line-form";
@@ -88,6 +89,7 @@ export async function createInvoiceLine(
       targetId: invoiceId,
       metadata: { lineId: line.id, description: line.description },
     });
+    await recalcInvoiceTotals(tx, actor, organizationId, invoiceId);
     return line;
   });
 }
@@ -126,6 +128,7 @@ export async function updateInvoiceLine(
       targetId: invoiceId,
       metadata: { lineId, description: line.description },
     });
+    await recalcInvoiceTotals(tx, actor, organizationId, invoiceId);
     return line;
   });
 }
@@ -161,6 +164,7 @@ export async function deleteInvoiceLine(
       targetId: invoiceId,
       metadata: { lineId, description: deleted.description },
     });
+    await recalcInvoiceTotals(tx, actor, organizationId, invoiceId);
   });
 }
 
@@ -212,6 +216,7 @@ export async function duplicateInvoiceLine(
         discountType: source.discountType,
         discountValue: source.discountValue,
         vatRateBp: source.vatRateBp,
+        reverseCharge: source.reverseCharge,
         subtotalCents: source.subtotalCents,
         totalCents: source.totalCents,
         notes: source.notes,
@@ -227,6 +232,7 @@ export async function duplicateInvoiceLine(
       targetId: invoiceId,
       metadata: { lineId: copy.id, description: copy.description, duplicatedFrom: source.id },
     });
+    await recalcInvoiceTotals(tx, actor, organizationId, invoiceId);
     return copy;
   });
 }
