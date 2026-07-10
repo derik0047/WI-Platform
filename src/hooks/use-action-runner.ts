@@ -17,13 +17,14 @@ export function useActionRunner() {
 
   function run(
     action: () => Promise<ActionResult>,
-    options?: { confirm?: string; successMessage?: string },
+    options?: { confirm?: string; successMessage?: string; onError?: () => void },
   ) {
     if (options?.confirm && !window.confirm(options.confirm)) return;
     startTransition(async () => {
       const result = await action();
       if (!result.ok) {
         toast.error(result.error);
+        options?.onError?.(); // e.g. roll back an optimistic update
         return;
       }
       toast.success(options?.successMessage ?? result.message ?? "Done");

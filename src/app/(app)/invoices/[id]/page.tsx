@@ -6,12 +6,14 @@ import { notFound } from "next/navigation";
 import { z } from "zod";
 
 import { InvoiceAuditTrail } from "@/components/invoices/invoice-audit-trail";
+import { InvoiceLinesEditor } from "@/components/invoices/invoice-lines-editor";
 import { InvoiceStatusActions } from "@/components/invoices/invoice-status-actions";
 import { InvoiceStatusBadge } from "@/components/invoices/invoice-status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireActiveOrganization } from "@/lib/auth/org";
 import { listAuditForTarget } from "@/lib/data/audit";
+import { listInvoiceLines } from "@/lib/data/invoice-lines";
 import { getInvoice, type InvoiceWithCustomer } from "@/lib/data/invoices";
 import { isAppError } from "@/lib/errors";
 import { formatDate } from "@/lib/format";
@@ -51,7 +53,10 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
   const { id } = await params;
   const { user, organization } = await requireActiveOrganization();
   const invoice = await loadInvoice(user.id, organization.id, id);
-  const history = await listAuditForTarget(user.id, organization.id, "invoice", invoice.id);
+  const [history, lines] = await Promise.all([
+    listAuditForTarget(user.id, organization.id, "invoice", invoice.id),
+    listInvoiceLines(user.id, organization.id, invoice.id),
+  ]);
 
   const today = new Date().toISOString().slice(0, 10);
   const overdue = isPastDue(invoice.status, invoice.dueDate, today);
@@ -110,6 +115,20 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
               <dd className="text-sm whitespace-pre-wrap">{invoice.notes}</dd>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Line items</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <InvoiceLinesEditor
+            invoiceId={invoice.id}
+            currency={invoice.currency}
+            lines={lines}
+            canEdit={isInvoiceEditable(invoice.status)}
+          />
         </CardContent>
       </Card>
 

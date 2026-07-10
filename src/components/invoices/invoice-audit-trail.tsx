@@ -7,11 +7,23 @@ const ACTION_LABEL: Partial<Record<AuditAction, string>> = {
   "invoice.updated": "updated this invoice",
   "invoice.status_changed": "changed the status",
   "invoice.deleted": "deleted this invoice",
+  "invoice.line_added": "added a line",
+  "invoice.line_updated": "updated a line",
+  "invoice.line_removed": "removed a line",
+  "invoice.line_reordered": "reordered the lines",
 };
 
 function detail(entry: AuditLogEntry): string | null {
   if (entry.action === "invoice.status_changed" && entry.metadata.from && entry.metadata.to) {
     return `${String(entry.metadata.from)} → ${String(entry.metadata.to)}`;
+  }
+  if (
+    (entry.action === "invoice.line_added" ||
+      entry.action === "invoice.line_updated" ||
+      entry.action === "invoice.line_removed") &&
+    entry.metadata.description
+  ) {
+    return String(entry.metadata.description);
   }
   return null;
 }

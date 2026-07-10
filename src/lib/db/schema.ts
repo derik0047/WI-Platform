@@ -1,8 +1,10 @@
 import {
+  bigint,
   date,
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -130,6 +132,10 @@ export const auditAction = pgEnum("audit_action", [
   "invoice.updated",
   "invoice.status_changed",
   "invoice.deleted",
+  "invoice.line_added",
+  "invoice.line_updated",
+  "invoice.line_removed",
+  "invoice.line_reordered",
 ]);
 
 /**
@@ -282,3 +288,51 @@ export const invoices = pgTable(
 export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type InvoiceStatus = (typeof invoiceStatus.enumValues)[number];
+
+/** How a line discount is expressed: a percentage or a fixed amount. */
+export const discountType = pgEnum("discount_type", ["percentage", "fixed"]);
+
+/**
+ * A line item on an invoice. Carries `organization_id` (tenant key, per the
+ * product-table convention) and belongs to a draft-only-editable invoice via
+ * `invoice_id` (cascade). Money is stored in integer minor units (cents);
+ * `discount_value` is basis points when `discount_type` = percentage, else cents.
+ * `subtotal_cents`/`total_cents` are derived at write time from the inputs by the
+ * data layer (lib/data/invoice-lines). Invoice-level totals are out of scope.
+ */
+export const invoiceLines = pgTable(
+  "invoice_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    invoiceId: uuid("invoice_id")
+      .notNull()
+      .references(() => invoices.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    description: text("description").notNull(),
+    quantity: numeric("quantity", { precision: 12, scale: 3 }).notNull().default("1"),
+    unit: text("unit").notNull().default("pcs"),
+    unitPriceCents: bigint("unit_price_cents", { mode: "number" }).notNull().default(0),
+    discountType: discountType("discount_type").notNull().default("percentage"),
+    // Basis points (1% = 100) when discount_type = percentage; cents when = fixed.
+    discountValue: bigint("discount_value", { mode: "number" }).notNull().default(0),
+    // VAT rate reference in basis points (e.g. 2100 = 21%). Not yet aggregated.
+    vatRateBp: integer("vat_rate_bp").notNull().default(2100),
+    subtotalCents: bigint("subtotal_cents", { mode: "number" }).notNull().default(0),
+    totalCents: bigint("total_cents", { mode: "number" }).notNull().default(0),
+    notes: text("notes"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("invoice_lines_org_idx").on(t.organizationId),
+    // Ordered listing per invoice (position, id tiebreaker for stable order).
+    index("invoice_lines_invoice_pos_idx").on(t.invoiceId, t.position, t.id),
+  ],
+);
+
+export type InvoiceLine = typeof invoiceLines.$inferSelect;
+export type NewInvoiceLine = typeof invoiceLines.$inferInsert;
+export type DiscountType = (typeof discountType.enumValues)[number];
