@@ -79,6 +79,9 @@ export default async function InvoiceDetailPage({ params }: PageProps) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline">
+            <Link href={`/invoices/${invoice.id}/preview`}>PDF</Link>
+          </Button>
           {isInvoiceEditable(invoice.status) && (
             <Button asChild variant="outline">
               <Link href={`/invoices/${invoice.id}/edit`}>Edit</Link>

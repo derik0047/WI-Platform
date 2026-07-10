@@ -43,6 +43,13 @@
       "when": 1783692141227,
       "tag": "0005_bored_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783703168332,
+      "tag": "0006_pretty_jimmy_woo",
+      "breakpoints": true
     }
   ]
 }

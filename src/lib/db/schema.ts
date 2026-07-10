@@ -351,3 +351,37 @@ export const invoiceLines = pgTable(
 export type InvoiceLine = typeof invoiceLines.$inferSelect;
 export type NewInvoiceLine = typeof invoiceLines.$inferInsert;
 export type DiscountType = (typeof discountType.enumValues)[number];
+
+/**
+ * An organization's company profile: the issuing party's details for invoice
+ * documents (address, tax numbers, payment/bank details and logo). 1:1 with an
+ * organization. All fields are optional; the invoice PDF falls back to the
+ * organization name when the legal name is unset.
+ */
+export const organizationProfiles = pgTable("organization_profiles", {
+  organizationId: uuid("organization_id")
+    .primaryKey()
+    .references(() => organizations.id, { onDelete: "cascade" }),
+  legalName: text("legal_name"),
+  addressLine: text("address_line"),
+  postalCode: text("postal_code"),
+  city: text("city"),
+  country: text("country"),
+  email: text("email"),
+  phone: text("phone"),
+  website: text("website"),
+  kvkNumber: text("kvk_number"),
+  vatNumber: text("vat_number"),
+  iban: text("iban"),
+  bic: text("bic"),
+  bankName: text("bank_name"),
+  paymentTerms: text("payment_terms"),
+  // Data URL (data:image/png|jpeg;base64,...), embedded in the PDF. Bounded in the
+  // data layer / form; decoded by lib/invoices/pdf/logo.
+  logoDataUrl: text("logo_data_url"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export type OrganizationProfile = typeof organizationProfiles.$inferSelect;
+export type NewOrganizationProfile = typeof organizationProfiles.$inferInsert;
